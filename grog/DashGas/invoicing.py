@@ -110,7 +110,37 @@ class InvoicingEngine:
     
     def get_supplier_metrics(self, supplier_id: int) -> Dict[str, Any]:
         """Get comprehensive financial metrics for a supplier."""
-        breakdown = self.db.get_supplier_cost_breakdown(supplier_id)
+        try:
+            breakdown = self.db.get_supplier_cost_breakdown(supplier_id)
+        except ValueError:
+            # Supplier has no invoices - return empty metrics
+            conn = self.db._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM suppliers WHERE supplier_id = ?", (supplier_id,))
+            row = cursor.fetchone()
+            supplier_name = row[0] if row else "Unknown Supplier"
+            
+            return {
+                "supplier": {
+                    "supplier_id": supplier_id,
+                    "supplier_name": supplier_name,
+                    "summary": {
+                        "total_invoices": 0,
+                        "total_cost": 0,
+                        "total_paid": 0,
+                        "outstanding": 0
+                    },
+                    "products": [],
+                    "status_breakdown": []
+                },
+                "metrics": {
+                    "total_products": 0,
+                    "avg_invoice_value": 0,
+                    "payment_rate": 0,
+                    "cheapest_product": None,
+                    "most_expensive_product": None
+                }
+            }
         
         # Calculate additional metrics
         summary = breakdown['summary']
@@ -151,14 +181,18 @@ class InvoicingEngine:
         
         cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
         
+        # Get product name first
+        cursor.execute("SELECT name FROM products WHERE product_id = ?", (product_id,))
+        product_row = cursor.fetchone()
+        product_name = product_row[0] if product_row else "Unknown Product"
+        
+        # Get cost trends
         cursor.execute("""
             SELECT 
-                p.name as product_name,
                 ii.unit_cost,
                 DATE(ii.created_at) as cost_date,
                 COUNT(*) as occurrences
             FROM invoice_items ii
-            JOIN products p ON ii.product_id = p.product_id
             WHERE ii.product_id = ?
             AND ii.created_at > ?
             GROUP BY DATE(ii.created_at), ii.unit_cost
@@ -179,7 +213,7 @@ class InvoicingEngine:
         
         return {
             "product_id": product_id,
-            "product_name": records[0]['product_name'] if records else "Unknown",
+            "product_name": product_name,
             "period_days": days,
             "records": records,
             "statistics": {
