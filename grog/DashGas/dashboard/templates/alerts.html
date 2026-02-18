@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts - DashGas{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">Active Alerts</h1>
+
+<div class="card">
+    <div class="card-header">Alert Summary</div>
+    
+    <div class="status-grid">
+        <div class="status-card red">
+            <div class="status-value">{{ summary.critical_alerts }}</div>
+            <div class="status-label">Critical Alerts</div>
+        </div>
+        
+        <div class="status-card yellow">
+            <div class="status-value">{{ summary.warning_alerts }}</div>
+            <div class="status-label">Warnings</div>
+        </div>
+        
+        <div class="status-card blue">
+            <div class="status-value">{{ summary.info_alerts }}</div>
+            <div class="status-label">Info</div>
+        </div>
+        
+        <div class="status-card green">
+            <div class="status-value">{{ summary.total_alerts }}</div>
+            <div class="status-label">Total Alerts</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Automation Cycle Results</div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Cycle</th>
+                <th>Alerts Generated</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cycle in summary.cycles_completed %}
+            <tr>
+                <td>{{ cycle.cycle|replace('_', ' ')|title }}</td>
+                <td>{{ cycle.alerts }}</td>
+                <td>
+                    {% if cycle.alerts > 0 %}
+                        <span class="badge badge-info">{{ cycle.alerts }} alert(s)</span>
+                    {% else %}
+                        <span class="badge badge-success">✅ Clear</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if alerts %}
+<div class="card">
+    <div class="card-header">Alert Details</div>
+    
+    {% for alert in alerts %}
+    <div style="border-left: 4px solid {% if alert.severity == 'critical' %}#e74c3c{% elif alert.severity == 'warning' %}#f39c12{% else %}#3498db{% endif %}; 
+                padding: 1rem; 
+                margin-bottom: 1rem; 
+                background: #f8f9fa; 
+                border-radius: 4px;">
+        
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+            <div>
+                <h3 style="margin: 0; color: #2c3e50;">
+                    {% if alert.severity == 'critical' %}🔴
+                    {% elif alert.severity == 'warning' %}🟡
+                    {% else %}🔵{% endif %}
+                    {{ alert.title }}
+                </h3>
+                <div style="color: #7f8c8d; font-size: 0.875rem; margin-top: 0.25rem;">
+                    {{ alert.alert_type|replace('_', ' ')|title }} | {{ alert.timestamp }}
+                </div>
+            </div>
+            
+            <span class="badge badge-{% if alert.severity == 'critical' %}danger{% elif alert.severity == 'warning' %}warning{% else %}info{% endif %}">
+                {{ alert.severity|upper }}
+            </span>
+        </div>
+        
+        <div style="color: #2c3e50; margin-top: 0.5rem;">
+            {{ alert.message }}
+        </div>
+        
+        {% if alert.product_id %}
+        <div style="margin-top: 0.5rem; color: #7f8c8d; font-size: 0.875rem;">
+            Product ID: {{ alert.product_id }}
+            {% if alert.order_id %}| Order ID: {{ alert.order_id }}{% endif %}
+            {% if alert.supplier_id %}| Supplier ID: {{ alert.supplier_id }}{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div style="text-align: center; padding: 3rem; color: #7f8c8d;">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">✅</div>
+        <h2 style="color: #27ae60;">All Clear!</h2>
+        <p>No active alerts at this time.</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

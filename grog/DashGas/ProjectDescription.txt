@@ -1,0 +1,148 @@
+You are building a production-ready, fully autonomous gas station inventory management system. This is a real product that will be sold to gas station owners as a monthly subscription service. Build, test, fix, and iterate until every component works correctly and the product is presentable to a paying customer.
+Do not stop until:
+
+All modules are fully implemented (no placeholders, no TODOs)
+All files pass syntax and logic checks
+The dashboard loads and displays real simulated data
+The Telegram bot responds correctly to all commands
+The automation engine runs and sends alerts
+The forecasting engine produces realistic projections
+
+Project structure:
+gasinventory/
+├── main.py
+├── database.py
+├── bot.py
+├── inventory.py
+├── orders.py
+├── reports.py
+├── forecasting.py
+├── automation.py
+├── simulators.py
+├── scheduler.py
+├── config.py
+├── requirements.txt
+├── README.md
+└── dashboard/
+    ├── app.py
+    ├── templates/
+    │   ├── base.html
+    │   ├── index.html
+    │   ├── inventory.html
+    │   ├── orders.html
+    │   └── forecast.html
+    └── static/
+        └── charts.js
+Module requirements:
+database.py
+
+SQLite database
+Tables: products, stock_logs, suppliers, orders, deliveries, anomalies, supplier_performance
+Products have: name, category, current_stock, unit, reorder_threshold, supplier_id, lead_time_days
+Log every stock update with timestamp and staff ID
+Track all supplier communications
+
+simulators.py
+
+Mock data sources with realistic randomized data for:
+
+Gas (regular, midgrade, premium, diesel) — ATG tank sensor simulation, gallons, capacity, daily burn rate, higher burn on weekends/mornings
+C-store general (snacks, drinks, automotive)
+Tobacco (cigarettes by brand/carton, cigars, chewing tobacco)
+Vapes (disposables and pods by brand)
+Coffee (bean/ground stock and cup count, resets daily, high morning velocity)
+
+
+Every simulator returns consistent JSON: {"product": "", "category": "", "current_stock": 0, "unit": "", "last_updated": ""}
+Each has a simulate_consumption() function that depletes stock realistically over time
+Every simulator is swappable with a real API via config.py
+
+scheduler.py
+
+Calls each simulator every 30 minutes and syncs to SQLite
+Runs forecast engine every 6 hours
+Triggers daily briefing at 6am
+Runs weekly report every Monday 8am
+Checks anomalies after every sync
+
+inventory.py
+
+Check thresholds after every stock update
+Flag items below threshold
+Generate reorder quantities based on average consumption rate
+
+forecasting.py
+
+Use last 30 days of stock logs to calculate average daily consumption per product
+Apply day-of-week weighting (weekends higher for fuel/coffee)
+Project forward 30 days
+Flag items where projected stockout is within supplier lead time window
+Owner can override lead time per supplier in config
+Return confidence bands that widen further out
+
+orders.py
+
+Group reorder items by supplier
+Draft plain-text order email per supplier
+Send via SMTP (Gmail-compatible)
+Log order in database with status (draft/sent/received)
+Track supplier response time
+
+automation.py
+This is the core of the product. Build these autonomous workflows:
+
+Order automation — when forecast predicts stockout within lead time, auto-draft and send supplier order. Configurable per supplier: auto-send vs approve-first. If no supplier confirmation within 24hrs, auto follow-up. If no response after 48hrs, alert owner via Telegram and suggest alternate supplier.
+Delivery scheduling — after order sent, auto-schedule expected delivery based on lead time. Send staff Telegram reminder morning of delivery. If delivery not marked received by end of day, alert owner.
+Forecast-driven preemptive ordering — never wait for threshold. Order based on projected stockout minus lead time. Adjust order quantity dynamically based on upcoming demand patterns (weekend coming = order more fuel/coffee).
+Anomaly detection — if stock drops 20%+ faster than historical burn rate: fuel = urgent leak/theft alert to owner. C-store item at zero with no sale logged = shrinkage alert. All anomalies logged to database.
+Supplier intelligence — track on-time delivery rate and fill rate per supplier. If supplier misses deliveries repeatedly, auto-suggest switching to backup supplier. Log all communications.
+Daily autonomous briefing — every morning 6am, Telegram message to owner with: what was ordered overnight, deliveries expected today, anomalies detected, top 3 items to watch. Owner only needs to act if something requires approval.
+
+bot.py
+
+Commands: /stock, /update [product] [quantity], /lowstock, /report, /orders
+Staff authenticate via Telegram user ID whitelist in config
+Owner gets additional commands: /approve [order_id], /override [product] [quantity], /suppliers
+
+reports.py
+
+Weekly report every Monday 8am
+Stock levels, orders placed, consumption trends, anomalies, supplier performance
+Send to owner via Telegram and email
+
+dashboard/ (Flask + Chart.js, mobile responsive, no heavy frameworks)
+
+Overview page — status cards per category with red/yellow/green indicators. Active alerts. Auto-refreshes every 5 minutes.
+Inventory page — full product table, inline edit for manual corrections, filter by category.
+Orders page — pending/sent/received orders. Manual order creation. Schedule delivery dates. Mark received triggers stock update.
+Forecast page — per-product demand forecast charts, projected stockout dates, recommended order dates, 30-day demand chart per category, confidence bands.
+Login protected (session-based username/password)
+Mobile responsive
+Telegram notification button to push alerts to all staff
+Export inventory snapshot to CSV
+
+config.py
+
+Telegram bot token and owner ID
+Staff whitelist
+SMTP credentials
+Supplier emails and lead times
+Per-supplier auto-send vs approve-first flag
+Dashboard login credentials
+All real API endpoints commented out and ready to swap in
+
+requirements.txt — all dependencies pinned to specific versions
+README.md — setup instructions, how to configure, how to swap simulators for real APIs, how to deploy
+Testing protocol — run after every module is built:
+
+Syntax check all Python files
+Initialize database and verify all tables created
+Run simulators and verify data populates database
+Run forecasting engine and verify projections are realistic
+Test all Telegram bot commands
+Load dashboard and verify all pages render with data
+Trigger automation workflows manually and verify alerts fire
+Fix any errors found and re-test until clean
+
+Definition of done: a gas station owner with no technical background can set this up following the README, connect their Telegram, and have the system running autonomously within 30 minutes. The dashboard is clean enough to demo to a potential customer. The automation runs without any daily input from the owner.
+Start with database.py, then simulators.py, then work through each module in order. Do not move to the next module until the current one passes its tests.

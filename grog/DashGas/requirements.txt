@@ -1,0 +1,11 @@
+# DashGas - Gas Station Inventory Management System
+# Production: No external dependencies required (Python 3.7+ stdlib only)
+# Development: pytest for testing
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Development tools (optional)
+black>=22.0.0
+flake8>=4.0.0

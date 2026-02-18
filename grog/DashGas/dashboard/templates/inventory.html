@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory - DashGas{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">Inventory Management</h1>
+
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>Product Inventory</span>
+        <div>
+            <select id="categoryFilter" class="form-control" style="width: auto; display: inline-block;" onchange="filterCategory()">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>
+                    {{ cat|capitalize }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Current Stock</th>
+                <th>Threshold</th>
+                <th>Status</th>
+                <th>Supplier</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td><strong>{{ product.name }}</strong></td>
+                <td>
+                    {% if product.category == 'fuel' %}🚗
+                    {% elif product.category == 'c-store' %}🛒
+                    {% elif product.category == 'tobacco' %}🚬
+                    {% elif product.category == 'vape' %}💨
+                    {% elif product.category == 'coffee' %}☕
+                    {% else %}📦{% endif %}
+                    {{ product.category }}
+                </td>
+                <td>{{ "%.2f"|format(product.current_stock) }} {{ product.unit }}</td>
+                <td>{{ "%.2f"|format(product.reorder_threshold) }}</td>
+                <td>
+                    {% if product.current_stock <= product.reorder_threshold %}
+                        <span class="badge badge-danger">🔴 Low Stock</span>
+                    {% elif product.current_stock <= product.reorder_threshold * 1.5 %}
+                        <span class="badge badge-warning">🟡 Monitor</span>
+                    {% else %}
+                        <span class="badge badge-success">🟢 Good</span>
+                    {% endif %}
+                </td>
+                <td>{{ product.supplier_name }}</td>
+                <td>
+                    <button class="btn btn-primary" onclick="showUpdateModal({{ product.product_id }}, '{{ product.name }}', {{ product.current_stock }}, '{{ product.unit }}')">
+                        Update
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Update Stock Modal -->
+<div id="updateModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div class="card" style="max-width: 500px; width: 90%;">
+        <div class="card-header">Update Stock</div>
+        <form method="POST" id="updateForm">
+            <div class="form-group">
+                <label>Product</label>
+                <input type="text" id="modalProductName" class="form-control" readonly>
+            </div>
+            
+            <div class="form-group">
+                <label>Current Stock</label>
+                <input type="text" id="modalCurrentStock" class="form-control" readonly>
+            </div>
+            
+            <div class="form-group">
+                <label>New Stock</label>
+                <input type="number" step="0.01" name="stock" id="modalNewStock" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Reason</label>
+                <select name="reason" class="form-control">
+                    <option value="manual_update">Manual Update</option>
+                    <option value="delivery_received">Delivery Received</option>
+                    <option value="inventory_correction">Inventory Correction</option>
+                    <option value="consumption">Consumption</option>
+                    <option value="damaged_goods">Damaged Goods</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 1rem;">
+                <button type="submit" class="btn btn-success">Update</button>
+                <button type="button" class="btn btn-danger" onclick="hideUpdateModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function filterCategory() {
+        const category = document.getElementById('categoryFilter').value;
+        window.location.href = '/inventory' + (category ? '?category=' + category : '');
+    }
+    
+    function showUpdateModal(productId, productName, currentStock, unit) {
+        document.getElementById('modalProductName').value = productName;
+        document.getElementById('modalCurrentStock').value = currentStock.toFixed(2) + ' ' + unit;
+        document.getElementById('modalNewStock').value = currentStock.toFixed(2);
+        document.getElementById('updateForm').action = '/inventory/update/' + productId;
+        document.getElementById('updateModal').style.display = 'flex';
+    }
+    
+    function hideUpdateModal() {
+        document.getElementById('updateModal').style.display = 'none';
+    }
+    
+    // Close modal on outside click
+    document.getElementById('updateModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            hideUpdateModal();
+        }
+    });
+</script>
+{% endblock %}

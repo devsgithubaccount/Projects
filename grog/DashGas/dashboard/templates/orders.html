@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Orders - DashGas{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 2rem;">Order Management</h1>
+
+<div class="card">
+    <div class="card-header">Pending Orders by Supplier</div>
+    
+    {% if supplier_orders %}
+        {% for order in supplier_orders %}
+        <div style="border: 1px solid #dee2e6; border-radius: 4px; padding: 1rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div>
+                    <h3 style="margin: 0;">🏢 {{ order.supplier_name }}</h3>
+                    <p style="color: #7f8c8d; margin: 0.5rem 0 0 0;">
+                        {{ order.supplier_email }} | {{ order.supplier_phone }}
+                    </p>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #2c3e50;">
+                        ${{ "%.2f"|format(order.total_cost) }}
+                    </div>
+                    <div style="color: #7f8c8d; font-size: 0.875rem;">
+                        Expected: {{ order.expected_delivery_date|format_date }}
+                    </div>
+                </div>
+            </div>
+            
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Unit Cost</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order.items %}
+                    <tr>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ "%.2f"|format(item.quantity_needed) }} {{ item.unit }}</td>
+                        <td>${{ "%.2f"|format(item.unit_cost) }}</td>
+                        <td>${{ "%.2f"|format(item.total_cost) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div style="margin-top: 1rem;">
+                <span class="badge badge-info">{{ order.order_status|upper }}</span>
+                <span style="margin-left: 1rem;">{{ order.items|length }} item(s)</span>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="text-align: center; color: #7f8c8d; padding: 2rem;">
+            ✅ No pending orders
+        </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header">Expected Deliveries (Next 7 Days)</div>
+    
+    {% if deliveries %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Supplier</th>
+                    <th>Quantity</th>
+                    <th>Expected Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for delivery in deliveries %}
+                <tr>
+                    <td>{{ delivery.product_name }}</td>
+                    <td>{{ delivery.supplier_name }}</td>
+                    <td>{{ "%.2f"|format(delivery.quantity) }}</td>
+                    <td>{{ delivery.expected_delivery_date|format_date }}</td>
+                    <td>
+                        {% if delivery.status == 'confirmed' %}
+                            <span class="badge badge-success">✅ Confirmed</span>
+                        {% elif delivery.status == 'sent' %}
+                            <span class="badge badge-info">📧 Sent</span>
+                        {% else %}
+                            <span class="badge badge-warning">⏳ {{ delivery.status|capitalize }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p style="text-align: center; color: #7f8c8d; padding: 2rem;">
+            No deliveries expected in the next 7 days
+        </p>
+    {% endif %}
+</div>
+{% endblock %}
