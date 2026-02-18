@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2>💰 Financial Dashboard</h2>
+    <p class="text-muted">Current month's financials at a glance</p>
+    
+    <!-- Current Month Summary -->
+    <div class="row mb-5">
+        <div class="col-md-12">
+            <h4>{{ current_month.month }} (Current)</h4>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h6 class="card-title">This Month's Cost</h6>
+                    <h2 class="text-primary">${{ "%.2f" | format(current_month.summary.total_cost) }}</h2>
+                    <small class="text-muted">{{ current_month.summary.total_invoices }} invoices</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h6 class="card-title">Amount Paid</h6>
+                    <h2 class="text-success">${{ "%.2f" | format(current_month.summary.total_paid) }}</h2>
+                    <small class="text-muted">{{ "%.0f" | format(current_month.summary.payment_rate) }}% of total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h6 class="card-title">Still Outstanding</h6>
+                    <h2 class="text-warning">${{ "%.2f" | format(current_month.summary.outstanding) }}</h2>
+                    <small class="text-muted">
+                        {% if current_month.summary.status_breakdown.pending > 0 %}
+                            {{ current_month.summary.status_breakdown.pending }} pending
+                        {% endif %}
+                        {% if current_month.summary.status_breakdown.partial > 0 %}
+                            {% if current_month.summary.status_breakdown.pending > 0 %}, {% endif %}
+                            {{ current_month.summary.status_breakdown.partial }} partial
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info">
+                <div class="card-body">
+                    <h6 class="card-title">Suppliers</h6>
+                    <h2 class="text-info">{{ current_month.summary.supplier_count }}</h2>
+                    <small class="text-muted">Active vendors</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Suppliers This Month -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h4>Top Suppliers This Month</h4>
+            <div class="list-group">
+                {% for supplier in current_month.suppliers[:5] %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">{{ supplier.name }}</h6>
+                        <small class="text-muted">{{ supplier.invoice_count }} invoices</small>
+                    </div>
+                    <div class="text-end">
+                        <h6 class="mb-0">${{ "%.2f" | format(supplier.total_cost) }}</h6>
+                        <small class="text-muted">{{ "%.1f" | format(supplier.total_cost / current_month.summary.total_cost * 100) }}%</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Top Products This Month -->
+        <div class="col-md-6">
+            <h4>Top Products This Month</h4>
+            <div class="list-group">
+                {% for product in current_month.products[:5] %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0">{{ product.product_name }}</h6>
+                        <small class="text-muted">{{ "%.2f" | format(product.total_quantity) }} units @ ${{ "%.4f" | format(product.avg_unit_cost) }}</small>
+                    </div>
+                    <div class="text-end">
+                        <h6 class="mb-0">${{ "%.2f" | format(product.total_cost) }}</h6>
+                        <small class="text-muted">{{ "%.1f" | format(product.total_cost / current_month.summary.total_cost * 100) }}%</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Month-over-Month Comparison -->
+    {% if last_month.summary.total_invoices > 0 %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Month-over-Month Comparison</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>{{ last_month.month }}</th>
+                            <th>{{ current_month.month }}</th>
+                            <th>Change</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Total Cost</strong></td>
+                            <td>${{ "%.2f" | format(last_month.summary.total_cost) }}</td>
+                            <td>${{ "%.2f" | format(current_month.summary.total_cost) }}</td>
+                            <td>
+                                {% if current_month.summary.total_cost > last_month.summary.total_cost %}
+                                    <span class="badge bg-danger">
+                                        +{{ "%.0f" | format((current_month.summary.total_cost - last_month.summary.total_cost) / last_month.summary.total_cost * 100 if last_month.summary.total_cost > 0 else 0) }}%
+                                    </span>
+                                {% elif current_month.summary.total_cost < last_month.summary.total_cost %}
+                                    <span class="badge bg-success">
+                                        -{{ "%.0f" | format((last_month.summary.total_cost - current_month.summary.total_cost) / last_month.summary.total_cost * 100 if last_month.summary.total_cost > 0 else 0) }}%
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No change</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Invoices</strong></td>
+                            <td>{{ last_month.summary.total_invoices }}</td>
+                            <td>{{ current_month.summary.total_invoices }}</td>
+                            <td>
+                                {% if current_month.summary.total_invoices > last_month.summary.total_invoices %}
+                                    <span class="badge bg-danger">+{{ current_month.summary.total_invoices - last_month.summary.total_invoices }}</span>
+                                {% elif current_month.summary.total_invoices < last_month.summary.total_invoices %}
+                                    <span class="badge bg-success">-{{ last_month.summary.total_invoices - current_month.summary.total_invoices }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No change</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Payment Rate</strong></td>
+                            <td>{{ "%.1f" | format(last_month.summary.payment_rate) }}%</td>
+                            <td>{{ "%.1f" | format(current_month.summary.payment_rate) }}%</td>
+                            <td>
+                                {% if current_month.summary.payment_rate > last_month.summary.payment_rate %}
+                                    <span class="badge bg-success">+{{ "%.1f" | format(current_month.summary.payment_rate - last_month.summary.payment_rate) }}pp</span>
+                                {% elif current_month.summary.payment_rate < last_month.summary.payment_rate %}
+                                    <span class="badge bg-danger">-{{ "%.1f" | format(last_month.summary.payment_rate - current_month.summary.payment_rate) }}pp</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No change</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Outstanding Balance</strong></td>
+                            <td>${{ "%.2f" | format(last_month.summary.outstanding) }}</td>
+                            <td>${{ "%.2f" | format(current_month.summary.outstanding) }}</td>
+                            <td>
+                                {% if current_month.summary.outstanding > last_month.summary.outstanding %}
+                                    <span class="badge bg-danger">+${{ "%.2f" | format(current_month.summary.outstanding - last_month.summary.outstanding) }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">-${{ "%.2f" | format(last_month.summary.outstanding - current_month.summary.outstanding) }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Quick Access</h4>
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('month_end_financials') }}" class="btn btn-outline-primary">
+                    📅 View Month Details
+                </a>
+                <a href="{{ url_for('fiscal_year_summary') }}" class="btn btn-outline-info">
+                    📊 Full Year Summary
+                </a>
+                <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">
+                    💼 Invoice Management
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -558,5 +558,173 @@ def export_financials():
         return redirect(url_for('invoices'))
 
 
+# ============================================================================
+# MONTH-END FINANCIAL REPORTING - Automatic, No User Work Required
+# ============================================================================
+
+@app.route('/financials/month')
+@login_required
+def month_end_financials():
+    """Automatic month-end financial summary (current month by default)."""
+    from invoicing import InvoicingEngine
+    from datetime import datetime
+    
+    # Get month/year from query params or use current
+    year = request.args.get('year', type=int) or datetime.now().year
+    month = request.args.get('month', type=int) or datetime.now().month
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        monthly_report = engine.get_monthly_financials(year, month)
+        
+        # Get available months for selector
+        cursor = db._get_connection().cursor()
+        cursor.execute("""
+            SELECT DISTINCT 
+                strftime('%Y', invoice_date) as year,
+                strftime('%m', invoice_date) as month
+            FROM invoices
+            ORDER BY year DESC, month DESC
+        """)
+        available_months = []
+        for row in cursor.fetchall():
+            if row[0] and row[1]:
+                available_months.append({
+                    'year': int(row[0]),
+                    'month': int(row[1]),
+                    'display': datetime(int(row[0]), int(row[1]), 1).strftime("%B %Y")
+                })
+        
+        db.close()
+        
+        return render_template('month_end_report.html',
+                             monthly_report=monthly_report,
+                             available_months=available_months,
+                             current_year=year,
+                             current_month=month)
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
+
+
+@app.route('/financials/year')
+@login_required
+def fiscal_year_summary():
+    """Automatic fiscal year financial summary."""
+    from invoicing import InvoicingEngine
+    from datetime import datetime
+    
+    year = request.args.get('year', type=int) or datetime.now().year
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        fiscal_report = engine.get_fiscal_year_summary(year)
+        
+        # Get available years
+        cursor = db._get_connection().cursor()
+        cursor.execute("""
+            SELECT DISTINCT strftime('%Y', invoice_date) as year
+            FROM invoices
+            ORDER BY year DESC
+        """)
+        available_years = [int(row[0]) for row in cursor.fetchall() if row[0]]
+        
+        db.close()
+        
+        return render_template('fiscal_year_report.html',
+                             fiscal_report=fiscal_report,
+                             available_years=available_years,
+                             current_year=year)
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
+
+
+@app.route('/financials/dashboard')
+@login_required
+def financial_dashboard():
+    """Quick financial dashboard - current month at a glance."""
+    from invoicing import InvoicingEngine
+    from datetime import datetime
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        # Get current month
+        now = datetime.now()
+        current_month = engine.get_monthly_financials(now.year, now.month)
+        
+        # Get last 3 months for comparison
+        last_month = engine.get_monthly_financials(now.year, now.month - 1 if now.month > 1 else now.month - 1)
+        
+        db.close()
+        
+        return render_template('financial_dashboard.html',
+                             current_month=current_month,
+                             last_month=last_month)
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
+
+
+@app.route('/financials/export/month')
+@login_required
+def export_month_report():
+    """Export month-end report as JSON."""
+    from invoicing import InvoicingEngine
+    from datetime import datetime
+    
+    year = request.args.get('year', type=int) or datetime.now().year
+    month = request.args.get('month', type=int) or datetime.now().month
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        json_export = engine.export_month_end_report(year, month)
+        db.close()
+        
+        response = jsonify(json.loads(json_export))
+        response.headers['Content-Disposition'] = f'attachment; filename=dashgas_month_{year:04d}_{month:02d}.json'
+        return response
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
+
+
+@app.route('/financials/export/year')
+@login_required
+def export_fiscal_report():
+    """Export fiscal year report as JSON."""
+    from invoicing import InvoicingEngine
+    from datetime import datetime
+    
+    year = request.args.get('year', type=int) or datetime.now().year
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        json_export = engine.export_fiscal_report(year)
+        db.close()
+        
+        response = jsonify(json.loads(json_export))
+        response.headers['Content-Disposition'] = f'attachment; filename=dashgas_fiscal_{year:04d}.json'
+        return response
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

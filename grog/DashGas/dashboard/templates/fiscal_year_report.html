@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>Fiscal Year {{ fiscal_report.year }} Summary</h2>
+        </div>
+        <div class="col-md-4 text-end">
+            <!-- Year Selector -->
+            <form class="d-flex gap-2" style="justify-content: flex-end;">
+                <select class="form-select" name="year" style="width: auto;" onchange="this.form.submit()">
+                    {% for y in available_years %}
+                    <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Annual Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Annual Cost</h6>
+                    <h3>${{ "%.2f" | format(fiscal_report.summary.total_cost) }}</h3>
+                    <small>{{ fiscal_report.summary.total_invoices }} invoices</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Amount Paid</h6>
+                    <h3>${{ "%.2f" | format(fiscal_report.summary.total_paid) }}</h3>
+                    <small>{{ "%.0f" | format(fiscal_report.summary.payment_rate) }}% of total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Outstanding</h6>
+                    <h3>${{ "%.2f" | format(fiscal_report.summary.total_outstanding) }}</h3>
+                    <small>Unpaid balance</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Monthly Average</h6>
+                    <h3>${{ "%.2f" | format(fiscal_report.summary.avg_monthly_cost) }}</h3>
+                    <small>Per month</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Annual Metrics</h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">Months with Activity</h6>
+                            <p class="lead">{{ fiscal_report.summary.months_with_invoices }}/12</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">Payment Rate</h6>
+                            <p class="lead">{{ "%.1f" | format(fiscal_report.summary.payment_rate) }}%</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">Avg Invoices/Month</h6>
+                            <p class="lead">{{ "%.1f" | format(fiscal_report.summary.total_invoices / 12) }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Monthly Breakdown Trend -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Monthly Spending Trend</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Month</th>
+                            <th>Invoices</th>
+                            <th>Total Cost</th>
+                            <th>Paid</th>
+                            <th>Outstanding</th>
+                            <th>Payment %</th>
+                            <th>Trend</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for month_data in fiscal_report.monthly_breakdown %}
+                        <tr>
+                            <td><strong>{{ month_data.month }}</strong></td>
+                            <td>{{ month_data.summary.total_invoices }}</td>
+                            <td>${{ "%.2f" | format(month_data.summary.total_cost) }}</td>
+                            <td>${{ "%.2f" | format(month_data.summary.total_paid) }}</td>
+                            <td>
+                                {% if month_data.summary.outstanding > 0 %}
+                                    <span class="badge bg-warning">${{ "%.2f" | format(month_data.summary.outstanding) }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">$0</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ "%.0f" | format(month_data.summary.payment_rate) }}%</td>
+                            <td>
+                                {% if month_data.summary.total_cost > fiscal_report.summary.avg_monthly_cost * 1.2 %}
+                                    <span class="badge bg-danger">↑ High</span>
+                                {% elif month_data.summary.total_cost < fiscal_report.summary.avg_monthly_cost * 0.8 %}
+                                    <span class="badge bg-success">↓ Low</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">≈ Avg</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Spending Variance -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Highest Month</h5>
+                    {% set max_month = fiscal_report.monthly_breakdown | max(attribute='summary.total_cost') %}
+                    <p class="lead">{{ max_month.month }}</p>
+                    <p>${{ "%.2f" | format(max_month.summary.total_cost) }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Lowest Month</h5>
+                    {% set min_month = fiscal_report.monthly_breakdown | min(attribute='summary.total_cost') %}
+                    <p class="lead">{{ min_month.month }}</p>
+                    <p>${{ "%.2f" | format(min_month.summary.total_cost) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Monthly Details Expandable -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Detailed Monthly Reports</h4>
+            <div class="accordion" id="monthlyAccordion">
+                {% for month_data in fiscal_report.monthly_breakdown %}
+                {% if month_data.summary.total_invoices > 0 %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#month{{ loop.index }}">
+                            <strong>{{ month_data.month }}</strong>
+                            <span class="ms-3">
+                                Total: ${{ "%.2f" | format(month_data.summary.total_cost) }}
+                                | Invoices: {{ month_data.summary.total_invoices }}
+                            </span>
+                        </button>
+                    </h2>
+                    <div id="month{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#monthlyAccordion">
+                        <div class="accordion-body">
+                            <h6>Top Suppliers</h6>
+                            <div class="list-group">
+                                {% for supplier in month_data.suppliers[:5] %}
+                                <div class="list-group-item">
+                                    <strong>{{ supplier.name }}</strong>: 
+                                    ${{ "%.2f" | format(supplier.total_cost) }}
+                                    ({{ supplier.invoice_count }} invoices)
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Export -->
+    <div class="row">
+        <div class="col-md-12">
+            <a href="{{ url_for('export_fiscal_report', year=current_year) }}" 
+               class="btn btn-outline-primary">📥 Export as JSON</a>
+            <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">← Back</a>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

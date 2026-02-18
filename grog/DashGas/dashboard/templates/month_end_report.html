@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>{{ monthly_report.month }} - Financial Summary</h2>
+        </div>
+        <div class="col-md-4 text-end">
+            <!-- Month Selector -->
+            <form class="d-flex gap-2" style="justify-content: flex-end;">
+                <select class="form-select" name="month" style="width: auto;" onchange="this.form.submit()">
+                    {% for m in available_months %}
+                    <option value="{{ m.month }}&year={{ m.year }}" 
+                        {% if m.year == current_year and m.month == current_month %}selected{% endif %}>
+                        {{ m.display }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Cost</h6>
+                    <h3>${{ "%.2f" | format(monthly_report.summary.total_cost) }}</h3>
+                    <small>{{ monthly_report.summary.total_invoices }} invoices</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Amount Paid</h6>
+                    <h3>${{ "%.2f" | format(monthly_report.summary.total_paid) }}</h3>
+                    <small>{{ "%.0f" | format(monthly_report.summary.payment_rate) }}% of total</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Outstanding</h6>
+                    <h3>${{ "%.2f" | format(monthly_report.summary.outstanding) }}</h3>
+                    <small>{{ monthly_report.summary.status_breakdown.pending + monthly_report.summary.status_breakdown.partial }} invoices</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Suppliers</h6>
+                    <h3>{{ monthly_report.summary.supplier_count }}</h3>
+                    <small>Active in this period</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status Breakdown -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Invoice Status Distribution</h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">Pending</h6>
+                            <h3 class="text-danger">{{ monthly_report.summary.status_breakdown.pending }}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">Partial Payment</h6>
+                            <h3 class="text-warning">{{ monthly_report.summary.status_breakdown.partial }}</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">Paid</h6>
+                            <h3 class="text-success">{{ monthly_report.summary.status_breakdown.paid }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Payment Progress -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Payment Status</h4>
+            <div class="card">
+                <div class="card-body">
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar bg-success" 
+                             role="progressbar" 
+                             style="width: {{ monthly_report.summary.payment_rate }}%"
+                             aria-valuenow="{{ monthly_report.summary.payment_rate }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ "%.0f" | format(monthly_report.summary.payment_rate) }}% Paid
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Supplier Breakdown -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Supplier Breakdown</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Supplier</th>
+                            <th>Invoices</th>
+                            <th>Total Cost</th>
+                            <th>Paid</th>
+                            <th>Outstanding</th>
+                            <th>% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for supplier in monthly_report.suppliers %}
+                        <tr>
+                            <td>{{ supplier.name }}</td>
+                            <td>{{ supplier.invoice_count }}</td>
+                            <td>${{ "%.2f" | format(supplier.total_cost) }}</td>
+                            <td>${{ "%.2f" | format(supplier.total_paid) }}</td>
+                            <td>
+                                {% if supplier.outstanding > 0 %}
+                                    <span class="badge bg-warning">${{ "%.2f" | format(supplier.outstanding) }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">Settled</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if monthly_report.summary.total_cost > 0 %}
+                                    {{ "%.1f" | format(supplier.total_cost / monthly_report.summary.total_cost * 100) }}%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Product Breakdown -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Product Cost Breakdown</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Avg Unit Cost</th>
+                            <th>Total Cost</th>
+                            <th>% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in monthly_report.products %}
+                        <tr>
+                            <td>{{ product.product_name }}</td>
+                            <td>{{ "%.2f" | format(product.total_quantity) }}</td>
+                            <td>${{ "%.4f" | format(product.avg_unit_cost) }}</td>
+                            <td><strong>${{ "%.2f" | format(product.total_cost) }}</strong></td>
+                            <td>
+                                {% if monthly_report.summary.total_cost > 0 %}
+                                    {{ "%.1f" | format(product.total_cost / monthly_report.summary.total_cost * 100) }}%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Export -->
+    <div class="row">
+        <div class="col-md-12">
+            <a href="{{ url_for('export_month_report', year=current_year, month=current_month) }}" 
+               class="btn btn-outline-primary">📥 Export as JSON</a>
+            <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">← Back</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

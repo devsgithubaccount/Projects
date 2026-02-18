@@ -272,6 +272,158 @@ class InvoicingEngine:
         """)
         
         return [dict(row) for row in cursor.fetchall()]
+    
+    def get_monthly_financials(self, year: int = None, month: int = None) -> Dict[str, Any]:
+        """Get automatic month-end financial summary (no work required from user)."""
+        from datetime import datetime, date
+        
+        if year is None or month is None:
+            now = datetime.now()
+            year = now.year
+            month = now.month
+        
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+        
+        # Build date range for the month
+        first_day = f"{year:04d}-{month:02d}-01"
+        if month == 12:
+            last_day = f"{year + 1:04d}-01-01"
+        else:
+            last_day = f"{year:04d}-{month + 1:02d}-01"
+        
+        month_name = datetime(year, month, 1).strftime("%B %Y")
+        
+        # Get summary for the month
+        cursor.execute("""
+            SELECT 
+                COUNT(DISTINCT invoice_id) as total_invoices,
+                SUM(total_amount) as total_cost,
+                SUM(paid_amount) as total_paid,
+                SUM(total_amount - paid_amount) as outstanding,
+                COUNT(DISTINCT CASE WHEN status = 'pending' THEN invoice_id END) as pending_count,
+                COUNT(DISTINCT CASE WHEN status = 'partial' THEN invoice_id END) as partial_count,
+                COUNT(DISTINCT CASE WHEN status = 'paid' THEN invoice_id END) as paid_count,
+                COUNT(DISTINCT supplier_id) as supplier_count
+            FROM invoices
+            WHERE invoice_date >= ? AND invoice_date < ?
+        """, (first_day, last_day))
+        
+        summary = dict(cursor.fetchone())
+        
+        # Get supplier breakdown for the month
+        cursor.execute("""
+            SELECT 
+                s.supplier_id,
+                s.name,
+                COUNT(i.invoice_id) as invoice_count,
+                SUM(i.total_amount) as total_cost,
+                SUM(i.paid_amount) as total_paid,
+                SUM(i.total_amount - i.paid_amount) as outstanding
+            FROM suppliers s
+            LEFT JOIN invoices i ON s.supplier_id = i.supplier_id 
+                AND i.invoice_date >= ? AND i.invoice_date < ?
+            WHERE i.invoice_id IS NOT NULL
+            GROUP BY s.supplier_id, s.name
+            ORDER BY total_cost DESC
+        """, (first_day, last_day))
+        
+        supplier_breakdown = [dict(row) for row in cursor.fetchall()]
+        
+        # Get product cost breakdown for the month
+        cursor.execute("""
+            SELECT 
+                ii.product_name,
+                SUM(ii.quantity) as total_quantity,
+                AVG(ii.unit_cost) as avg_unit_cost,
+                SUM(ii.total_cost) as total_cost
+            FROM invoice_items ii
+            JOIN invoices i ON ii.invoice_id = i.invoice_id
+            WHERE i.invoice_date >= ? AND i.invoice_date < ?
+            GROUP BY ii.product_name
+            ORDER BY total_cost DESC
+        """, (first_day, last_day))
+        
+        product_breakdown = [dict(row) for row in cursor.fetchall()]
+        
+        # Calculate metrics
+        total_cost = summary.get('total_cost') or 0
+        total_paid = summary.get('total_paid') or 0
+        payment_rate = (total_paid / total_cost * 100) if total_cost > 0 else 0
+        
+        return {
+            "month": month_name,
+            "year": year,
+            "period": f"{year:04d}-{month:02d}",
+            "summary": {
+                "total_invoices": summary.get('total_invoices') or 0,
+                "total_cost": total_cost,
+                "total_paid": total_paid,
+                "outstanding": summary.get('outstanding') or 0,
+                "supplier_count": summary.get('supplier_count') or 0,
+                "payment_rate": payment_rate,
+                "status_breakdown": {
+                    "pending": summary.get('pending_count') or 0,
+                    "partial": summary.get('partial_count') or 0,
+                    "paid": summary.get('paid_count') or 0
+                }
+            },
+            "suppliers": supplier_breakdown,
+            "products": product_breakdown
+        }
+    
+    def get_fiscal_year_summary(self, year: int = None) -> Dict[str, Any]:
+        """Get annual financial summary with monthly breakdown."""
+        from datetime import datetime
+        
+        if year is None:
+            year = datetime.now().year
+        
+        conn = self.db._get_connection()
+        cursor = conn.cursor()
+        
+        # Get monthly data for all 12 months
+        monthly_data = []
+        yearly_totals = {
+            "total_invoices": 0,
+            "total_cost": 0,
+            "total_paid": 0,
+            "total_outstanding": 0
+        }
+        
+        for month in range(1, 13):
+            monthly = self.get_monthly_financials(year, month)
+            monthly_data.append(monthly)
+            
+            yearly_totals["total_invoices"] += monthly["summary"]["total_invoices"]
+            yearly_totals["total_cost"] += monthly["summary"]["total_cost"]
+            yearly_totals["total_paid"] += monthly["summary"]["total_paid"]
+            yearly_totals["total_outstanding"] += monthly["summary"]["outstanding"]
+        
+        # Calculate annual payment rate
+        annual_payment_rate = (yearly_totals["total_paid"] / yearly_totals["total_cost"] * 100 \
+                              if yearly_totals["total_cost"] > 0 else 0)
+        
+        return {
+            "year": year,
+            "summary": {
+                **yearly_totals,
+                "payment_rate": annual_payment_rate,
+                "avg_monthly_cost": yearly_totals["total_cost"] / 12 if yearly_totals["total_cost"] > 0 else 0,
+                "months_with_invoices": sum(1 for m in monthly_data if m["summary"]["total_invoices"] > 0)
+            },
+            "monthly_breakdown": monthly_data
+        }
+    
+    def export_month_end_report(self, year: int = None, month: int = None) -> str:
+        """Export month-end financial report as JSON."""
+        monthly = self.get_monthly_financials(year, month)
+        return json.dumps(monthly, indent=2, default=str)
+    
+    def export_fiscal_report(self, year: int = None) -> str:
+        """Export fiscal year report as JSON."""
+        fiscal = self.get_fiscal_year_summary(year)
+        return json.dumps(fiscal, indent=2, default=str)
 
 
 if __name__ == "__main__":
