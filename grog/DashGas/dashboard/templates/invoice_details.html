@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>Invoice {{ invoice.invoice_number }}</h2>
+        </div>
+        <div class="col-md-4 text-end">
+            <span class="badge bg-lg 
+                {% if invoice.status == 'pending' %}bg-danger
+                {% elif invoice.status == 'partial' %}bg-warning
+                {% else %}bg-success
+                {% endif %}">
+                {{ invoice.status | upper }}
+            </span>
+        </div>
+    </div>
+    
+    <!-- Invoice Header -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Supplier Information</h5>
+                    <p>
+                        <strong>{{ supplier_name }}</strong><br>
+                        <small class="text-muted">Supplier ID: {{ invoice.supplier_id }}</small>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Invoice Details</h5>
+                    <p>
+                        <strong>Invoice Date:</strong> {{ invoice.invoice_date }}<br>
+                        <strong>Due Date:</strong> {{ invoice.due_date or "Not specified" }}<br>
+                        <strong>Created:</strong> {{ invoice.created_at }}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Amount Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Amount</h6>
+                    <h3>${{ "%.2f" | format(invoice.total_amount) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Amount Paid</h6>
+                    <h3>${{ "%.2f" | format(invoice.paid_amount) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Outstanding</h6>
+                    <h3>${{ "%.2f" | format(invoice.total_amount - invoice.paid_amount) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Line Items</h6>
+                    <h3>{{ items | length }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Line Items -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Line Items</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Unit Cost</th>
+                            <th>Total Cost</th>
+                            {% if items[0].order_id %}
+                            <th>Order</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ item.product_name }}</td>
+                            <td>{{ "%.2f" | format(item.quantity) }}</td>
+                            <td>${{ "%.4f" | format(item.unit_cost) }}</td>
+                            <td><strong>${{ "%.2f" | format(item.total_cost) }}</strong></td>
+                            {% if item.order_id %}
+                            <td>
+                                <span class="badge bg-secondary">Order #{{ item.order_id }}</span>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <td colspan="
+                            {% if items[0].order_id %}4{% else %}3{% endif %}"
+                                 class="text-end"><strong>Total:</strong></td>
+                            <td><strong>${{ "%.2f" | format(invoice.total_amount) }}</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Payment Status -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Payment Status</h4>
+            <div class="card">
+                <div class="card-body">
+                    {% if invoice.total_amount > 0 %}
+                    <div class="progress mb-3" style="height: 25px;">
+                        <div class="progress-bar bg-success" 
+                             role="progressbar" 
+                             style="width: {{ (invoice.paid_amount / invoice.total_amount * 100) }}%"
+                             aria-valuenow="{{ (invoice.paid_amount / invoice.total_amount * 100) }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ "%.0f" | format((invoice.paid_amount / invoice.total_amount * 100)) }}% Paid
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <p class="mb-0">
+                        <strong>Remaining to Pay:</strong> 
+                        <span class="badge bg-warning">
+                            ${{ "%.2f" | format(invoice.total_amount - invoice.paid_amount) }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Update Payment Form -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Update Payment</h4>
+            <form method="POST" action="{{ url_for('update_invoice', invoice_id=invoice.invoice_id) }}">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status" required>
+                            <option value="pending" {% if invoice.status == 'pending' %}selected{% endif %}>Pending</option>
+                            <option value="partial" {% if invoice.status == 'partial' %}selected{% endif %}>Partial</option>
+                            <option value="paid" {% if invoice.status == 'paid' %}selected{% endif %}>Paid</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Paid Amount</label>
+                        <input type="number" class="form-control" name="paid_amount" 
+                               value="{{ invoice.paid_amount }}" step="0.01" max="{{ invoice.total_amount }}">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Update Invoice</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Notes -->
+    {% if invoice.notes %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Notes</h4>
+            <div class="card">
+                <div class="card-body">
+                    <p>{{ invoice.notes }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Navigation -->
+    <div class="row">
+        <div class="col-md-12">
+            <a href="{{ url_for('supplier_invoices', supplier_id=invoice.supplier_id) }}" 
+               class="btn btn-secondary">← Back to Supplier</a>
+            <a href="{{ url_for('invoices') }}" 
+               class="btn btn-outline-secondary">← Back to Invoices</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

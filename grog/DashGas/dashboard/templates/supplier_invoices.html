@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2>{{ supplier_name }} - Cost Breakdown</h2>
+    
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Total Cost</h6>
+                    <h3 class="text-primary">${{ "%.2f" | format(metrics.supplier.summary.total_cost) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Total Paid</h6>
+                    <h3 class="text-success">${{ "%.2f" | format(metrics.supplier.summary.total_paid) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Outstanding</h6>
+                    <h3 class="text-warning">${{ "%.2f" | format(metrics.supplier.summary.outstanding) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Invoices</h6>
+                    <h3>{{ metrics.supplier.summary.total_invoices }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Avg Invoice Value</h6>
+                    <p class="lead">${{ "%.2f" | format(metrics.metrics.avg_invoice_value) }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Payment Rate</h6>
+                    <p class="lead">{{ "%.1f" | format(metrics.metrics.payment_rate * 100) }}%</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Products Purchased</h6>
+                    <p class="lead">{{ metrics.metrics.total_products }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cost Breakdown by Product -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Product Cost Breakdown</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Avg Unit Cost</th>
+                            <th>Min Unit Cost</th>
+                            <th>Max Unit Cost</th>
+                            <th>Total Cost</th>
+                            <th>% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in metrics.supplier.products %}
+                        <tr>
+                            <td>{{ product.product_name }}</td>
+                            <td>{{ "%.2f" | format(product.total_quantity) }}</td>
+                            <td>${{ "%.4f" | format(product.avg_unit_cost) }}</td>
+                            <td>${{ "%.4f" | format(product.min_unit_cost) }}</td>
+                            <td>${{ "%.4f" | format(product.max_unit_cost) }}</td>
+                            <td><strong>${{ "%.2f" | format(product.total_cost) }}</strong></td>
+                            <td>
+                                {% if metrics.supplier.summary.total_cost %}
+                                    {{ "%.1f" | format(product.total_cost / metrics.supplier.summary.total_cost * 100) }}%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Price Variance Analysis -->
+    {% if metrics.supplier.products %}
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Cheapest Product</h6>
+                    <p class="lead">{{ metrics.metrics.cheapest_product.name }}</p>
+                    <p class="text-success">${{ "%.4f" | format(metrics.metrics.cheapest_product.unit_cost) }} per unit</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Most Expensive Product</h6>
+                    <p class="lead">{{ metrics.metrics.most_expensive_product.name }}</p>
+                    <p class="text-danger">${{ "%.4f" | format(metrics.metrics.most_expensive_product.unit_cost) }} per unit</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Invoice Status Breakdown -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Invoice Status Breakdown</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Status</th>
+                            <th>Count</th>
+                            <th>Total Amount</th>
+                            <th>% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for status in metrics.supplier.status_breakdown %}
+                        <tr>
+                            <td>
+                                {% if status.status == 'pending' %}
+                                    <span class="badge bg-danger">{{ status.status }}</span>
+                                {% elif status.status == 'partial' %}
+                                    <span class="badge bg-warning">{{ status.status }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">{{ status.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ status.count }}</td>
+                            <td>${{ "%.2f" | format(status.total_amount) }}</td>
+                            <td>
+                                {% if metrics.supplier.summary.total_cost %}
+                                    {{ "%.1f" | format(status.total_amount / metrics.supplier.summary.total_cost * 100) }}%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Invoices -->
+    <div class="row">
+        <div class="col-md-12">
+            <h4>Recent Invoices</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Date</th>
+                            <th>Due Date</th>
+                            <th>Amount</th>
+                            <th>Paid</th>
+                            <th>Outstanding</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in invoices %}
+                        <tr>
+                            <td>{{ invoice.invoice_number }}</td>
+                            <td>{{ invoice.invoice_date }}</td>
+                            <td>{{ invoice.due_date or "—" }}</td>
+                            <td>${{ "%.2f" | format(invoice.total_amount) }}</td>
+                            <td>${{ "%.2f" | format(invoice.paid_amount) }}</td>
+                            <td>${{ "%.2f" | format(invoice.total_amount - invoice.paid_amount) }}</td>
+                            <td>
+                                {% if invoice.status == 'pending' %}
+                                    <span class="badge bg-danger">Pending</span>
+                                {% elif invoice.status == 'partial' %}
+                                    <span class="badge bg-warning">Partial</span>
+                                {% else %}
+                                    <span class="badge bg-success">Paid</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('invoice_details', invoice_id=invoice.invoice_id) }}" 
+                                   class="btn btn-sm btn-info">View</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <a href="{{ url_for('invoices') }}" class="btn btn-secondary">← Back to Invoices</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

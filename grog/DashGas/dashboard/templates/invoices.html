@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2>Invoicing & Financial Management</h2>
+    
+    <!-- Financial Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Cost</h6>
+                    <h3>${{ "%.2f" | format(financial_summary.total_cost) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Paid</h6>
+                    <h3>${{ "%.2f" | format(financial_summary.total_paid) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Outstanding</h6>
+                    <h3>${{ "%.2f" | format(financial_summary.total_outstanding) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Pending Invoices</h6>
+                    <h3>{{ financial_summary.pending_invoices }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Reports Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('financial_report') }}" class="btn btn-outline-primary">📊 Financial Report</a>
+                <a href="{{ url_for('export_financials') }}" class="btn btn-outline-secondary">📥 Export JSON</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Payment Schedule -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Payment Schedule (Next 30 Days)</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Supplier</th>
+                            <th>Amount</th>
+                            <th>Outstanding</th>
+                            <th>Due Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if payment_schedule %}
+                            {% for invoice in payment_schedule %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('invoice_details', invoice_id=invoice.invoice_id) }}">
+                                        {{ invoice.invoice_number }}
+                                    </a>
+                                </td>
+                                <td>{{ invoice.supplier_name }}</td>
+                                <td>${{ "%.2f" | format(invoice.total_amount) }}</td>
+                                <td><strong>${{ "%.2f" | format(invoice.outstanding) }}</strong></td>
+                                <td>{{ invoice.due_date }}</td>
+                                <td>
+                                    {% if invoice.status == 'pending' %}
+                                        <span class="badge bg-danger">Pending</span>
+                                    {% elif invoice.status == 'partial' %}
+                                        <span class="badge bg-warning">Partial</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Paid</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">No pending invoices</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Suppliers by Cost -->
+    <div class="row">
+        <div class="col-md-12">
+            <h4>Supplier Cost Summary</h4>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Supplier</th>
+                            <th>Total Invoices</th>
+                            <th>Total Cost</th>
+                            <th>Total Paid</th>
+                            <th>Outstanding</th>
+                            <th>Payment Rate</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for supplier in financial_summary.suppliers %}
+                        <tr>
+                            <td>{{ supplier.name }}</td>
+                            <td>{{ supplier.total_invoices or 0 }}</td>
+                            <td>${{ "%.2f" | format(supplier.total_cost or 0) }}</td>
+                            <td>${{ "%.2f" | format(supplier.total_paid or 0) }}</td>
+                            <td>${{ "%.2f" | format(supplier.outstanding or 0) }}</td>
+                            <td>
+                                {% if supplier.total_cost and supplier.total_cost > 0 %}
+                                    {{ "%.0f" | format((supplier.total_paid or 0) / (supplier.total_cost or 1) * 100) }}%
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('supplier_invoices', supplier_id=supplier.supplier_id) }}" 
+                                   class="btn btn-sm btn-info">View Details</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

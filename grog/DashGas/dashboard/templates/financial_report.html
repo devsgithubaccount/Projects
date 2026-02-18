@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2>Financial Report & Budget Analysis</h2>
+    
+    <!-- Overall Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Spending</h6>
+                    <h3>${{ "%.2f" | format(budget_analysis.total_spending) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Pending Invoices</h6>
+                    <h3>{{ budget_analysis.pending_invoices }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Outstanding</h6>
+                    <h3>${{ "%.2f" | format(budget_analysis.outstanding_value) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Active Suppliers</h6>
+                    <h3>{{ budget_analysis.supplier_count }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Spenders -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Top Suppliers by Spending</h4>
+            <p class="text-muted">Shows spending distribution and cumulative percentage</p>
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Rank</th>
+                            <th>Supplier</th>
+                            <th>Total Spending</th>
+                            <th>% of Total</th>
+                            <th>Cumulative %</th>
+                            <th>Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for spender in budget_analysis.top_spenders %}
+                        <tr>
+                            <td><strong>#{{ loop.index }}</strong></td>
+                            <td>{{ spender.supplier_name }}</td>
+                            <td>${{ "%.2f" | format(spender.cost) }}</td>
+                            <td>{{ "%.1f" | format(spender.percentage) }}%</td>
+                            <td>{{ "%.1f" | format(spender.cumulative_percentage) }}%</td>
+                            <td>
+                                <div class="progress">
+                                    <div class="progress-bar" 
+                                         role="progressbar" 
+                                         style="width: {{ spender.percentage }}%"
+                                         aria-valuenow="{{ spender.percentage }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Financial Summary Table -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h4>Detailed Financial Summary</h4>
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Supplier</th>
+                            <th>Total Invoices</th>
+                            <th>Total Cost</th>
+                            <th>Total Paid</th>
+                            <th>Outstanding</th>
+                            <th>Pending Count</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for supplier in financial_summary.suppliers %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('supplier_invoices', supplier_id=supplier.supplier_id) }}">
+                                    {{ supplier.name }}
+                                </a>
+                            </td>
+                            <td>{{ supplier.total_invoices or 0 }}</td>
+                            <td>${{ "%.2f" | format(supplier.total_cost or 0) }}</td>
+                            <td>${{ "%.2f" | format(supplier.total_paid or 0) }}</td>
+                            <td>
+                                {% if supplier.outstanding and supplier.outstanding > 0 %}
+                                    <span class="badge bg-warning">${{ "%.2f" | format(supplier.outstanding) }}</span>
+                                {% else %}
+                                    <span class="badge bg-success">$0.00</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if supplier.pending_count and supplier.pending_count > 0 %}
+                                    <span class="badge bg-danger">{{ supplier.pending_count }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if supplier.outstanding and supplier.outstanding > 0 %}
+                                    <span class="badge bg-warning">Outstanding</span>
+                                {% else %}
+                                    <span class="badge bg-success">Settled</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Summary Statistics -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Payment Status</h5>
+                    <p>
+                        <strong>Total Cost:</strong> ${{ "%.2f" | format(financial_summary.total_cost) }}<br>
+                        <strong>Total Paid:</strong> ${{ "%.2f" | format(financial_summary.total_paid) }}<br>
+                        <strong>Outstanding:</strong> 
+                        <span class="text-warning">
+                            ${{ "%.2f" | format(financial_summary.total_outstanding) }}
+                        </span>
+                    </p>
+                    {% if financial_summary.total_cost %}
+                    <div class="progress">
+                        <div class="progress-bar bg-success" 
+                             role="progressbar" 
+                             style="width: {{ (financial_summary.total_paid / financial_summary.total_cost * 100) }}%"
+                             aria-valuenow="{{ (financial_summary.total_paid / financial_summary.total_cost * 100) }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            Paid: {{ "%.0f" | format((financial_summary.total_paid / financial_summary.total_cost * 100)) }}%
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Invoice Status</h5>
+                    <p>
+                        <strong>Total Invoices:</strong> 
+                        <span class="badge bg-info">
+                            {{ financial_summary.suppliers | length }}
+                        </span>
+                    </p>
+                    <p>
+                        <strong>Pending:</strong> 
+                        <span class="badge bg-danger">
+                            {{ budget_analysis.pending_invoices }}
+                        </span>
+                    </p>
+                    <p>
+                        <strong>Active Suppliers:</strong> 
+                        <span class="badge bg-info">
+                            {{ budget_analysis.supplier_count }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Export Section -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('export_financials') }}" class="btn btn-outline-primary">
+                    📥 Export as JSON
+                </a>
+                <a href="{{ url_for('invoices') }}" class="btn btn-outline-secondary">
+                    ← Back to Invoices
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

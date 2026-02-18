@@ -18,6 +18,7 @@ from forecasting import ForecastingEngine
 from orders import OrderManager
 from automation import AutomationEngine
 from database import DashGasDatabase
+from invoicing import InvoicingEngine
 
 
 app = Flask(__name__)
@@ -376,6 +377,185 @@ def format_date(value):
         except:
             return value
     return value
+
+
+# ============================================================================
+# INVOICING ROUTES - Cost Tracking and Financial Management
+# ============================================================================
+
+@app.route('/invoices')
+@login_required
+def invoices():
+    """Invoice management and financial overview page."""
+    from invoicing import InvoicingEngine
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    # Get financial summary
+    financial_summary = engine.get_financial_summary()
+    
+    # Get payment schedule
+    payment_schedule = engine.get_payment_schedule()
+    
+    db.close()
+    
+    return render_template('invoices.html',
+                         financial_summary=financial_summary,
+                         payment_schedule=payment_schedule)
+
+
+@app.route('/invoices/supplier/<int:supplier_id>')
+@login_required
+def supplier_invoices(supplier_id):
+    """View invoices and cost breakdown for a specific supplier."""
+    from invoicing import InvoicingEngine
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        # Get supplier metrics
+        metrics = engine.get_supplier_metrics(supplier_id)
+        
+        # Get invoices for supplier
+        invoices_list = db.get_supplier_invoices(supplier_id)
+        
+        db.close()
+        
+        return render_template('supplier_invoices.html',
+                             supplier_id=supplier_id,
+                             supplier_name=metrics['supplier']['supplier_name'],
+                             metrics=metrics,
+                             invoices=invoices_list)
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
+
+
+@app.route('/invoices/details/<int:invoice_id>')
+@login_required
+def invoice_details(invoice_id):
+    """View detailed invoice information."""
+    db = DashGasDatabase(DB_PATH)
+    
+    try:
+        invoice = db.get_invoice(invoice_id)
+        if not invoice:
+            flash('Invoice not found', 'error')
+            return redirect(url_for('invoices'))
+        
+        items = db.get_invoice_items(invoice_id)
+        
+        # Get supplier name
+        cursor = db._get_connection().cursor()
+        cursor.execute("SELECT name FROM suppliers WHERE supplier_id = ?", 
+                      (invoice['supplier_id'],))
+        supplier = cursor.fetchone()
+        supplier_name = supplier[0] if supplier else "Unknown"
+        
+        db.close()
+        
+        return render_template('invoice_details.html',
+                             invoice=invoice,
+                             items=items,
+                             supplier_name=supplier_name)
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
+
+
+@app.route('/invoices/create/<int:order_id>', methods=['POST'])
+@login_required
+def create_invoice(order_id):
+    """Create invoice from a purchase order."""
+    from invoicing import InvoicingEngine
+    
+    invoice_number = request.form.get('invoice_number')
+    invoice_date = request.form.get('invoice_date')
+    due_date = request.form.get('due_date')
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        invoice_id = engine.create_invoice_from_order(
+            order_id, invoice_number, invoice_date, due_date
+        )
+        db.close()
+        flash(f'Invoice #{invoice_id} created successfully', 'success')
+        return redirect(url_for('invoice_details', invoice_id=invoice_id))
+    except Exception as e:
+        db.close()
+        flash(f'Error creating invoice: {str(e)}', 'error')
+        return redirect(url_for('orders'))
+
+
+@app.route('/invoices/update/<int:invoice_id>', methods=['POST'])
+@login_required
+def update_invoice(invoice_id):
+    """Update invoice status and payment."""
+    status = request.form.get('status')
+    paid_amount = float(request.form.get('paid_amount', 0))
+    
+    db = DashGasDatabase(DB_PATH)
+    
+    try:
+        db.update_invoice_status(invoice_id, status, paid_amount)
+        flash(f'Invoice #{invoice_id} updated', 'success')
+    except Exception as e:
+        flash(f'Error: {str(e)}', 'error')
+    finally:
+        db.close()
+    
+    return redirect(request.referrer or url_for('invoices'))
+
+
+@app.route('/invoices/report/financials')
+@login_required
+def financial_report():
+    """View comprehensive financial report."""
+    from invoicing import InvoicingEngine
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    # Get budget analysis
+    budget_analysis = engine.get_budget_analysis()
+    
+    # Get financial summary
+    financial_summary = engine.get_financial_summary()
+    
+    db.close()
+    
+    return render_template('financial_report.html',
+                         budget_analysis=budget_analysis,
+                         financial_summary=financial_summary)
+
+
+@app.route('/invoices/report/export')
+@login_required
+def export_financials():
+    """Export financial data."""
+    from invoicing import InvoicingEngine
+    
+    db = DashGasDatabase(DB_PATH)
+    engine = InvoicingEngine(db)
+    
+    try:
+        json_export = engine.export_financials()
+        db.close()
+        
+        # Return as file download
+        response = jsonify(json.loads(json_export))
+        response.headers['Content-Disposition'] = 'attachment; filename=dashgas_financials.json'
+        return response
+    except Exception as e:
+        db.close()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('invoices'))
 
 
 if __name__ == '__main__':

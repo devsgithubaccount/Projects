@@ -36,8 +36,8 @@ class DashGasDatabase:
         # Drop existing tables for clean initialization (dev mode)
         # In production, use migrations instead
         tables = [
-            "invoice_items", "invoices", "deliveries", "orders", "stock_logs", 
-            "anomalies", "supplier_performance", "products", "suppliers"
+            "deliveries", "orders", "stock_logs", "anomalies",
+            "supplier_performance", "products", "suppliers"
         ]
         for table in tables:
             cursor.execute(f"DROP TABLE IF EXISTS {table}")
@@ -160,42 +160,6 @@ class DashGasDatabase:
             )
         """)
         
-        # Invoices table - tracks invoices from suppliers
-        cursor.execute("""
-            CREATE TABLE invoices (
-                invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                supplier_id INTEGER NOT NULL,
-                invoice_number TEXT NOT NULL UNIQUE,
-                invoice_date TIMESTAMP NOT NULL,
-                due_date TIMESTAMP,
-                total_amount REAL NOT NULL DEFAULT 0,
-                paid_amount REAL NOT NULL DEFAULT 0,
-                status TEXT DEFAULT 'pending',
-                notes TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (supplier_id) REFERENCES suppliers(supplier_id) ON DELETE RESTRICT
-            )
-        """)
-        
-        # Invoice items table - line items for invoices
-        cursor.execute("""
-            CREATE TABLE invoice_items (
-                item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                invoice_id INTEGER NOT NULL,
-                order_id INTEGER,
-                product_id INTEGER NOT NULL,
-                product_name TEXT NOT NULL,
-                quantity REAL NOT NULL,
-                unit_cost REAL NOT NULL,
-                total_cost REAL NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (invoice_id) REFERENCES invoices(invoice_id) ON DELETE CASCADE,
-                FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE SET NULL,
-                FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE RESTRICT
-            )
-        """)
-        
         # Create indexes for performance
         cursor.execute("CREATE INDEX idx_products_category ON products(category)")
         cursor.execute("CREATE INDEX idx_products_supplier ON products(supplier_id)")
@@ -204,10 +168,6 @@ class DashGasDatabase:
         cursor.execute("CREATE INDEX idx_orders_product ON orders(product_id)")
         cursor.execute("CREATE INDEX idx_anomalies_status ON anomalies(status)")
         cursor.execute("CREATE INDEX idx_anomalies_product ON anomalies(product_id)")
-        cursor.execute("CREATE INDEX idx_invoices_supplier ON invoices(supplier_id)")
-        cursor.execute("CREATE INDEX idx_invoices_status ON invoices(status)")
-        cursor.execute("CREATE INDEX idx_invoice_items_invoice ON invoice_items(invoice_id)")
-        cursor.execute("CREATE INDEX idx_invoice_items_product ON invoice_items(product_id)")
         
         conn.commit()
     
@@ -441,205 +401,6 @@ class DashGasDatabase:
             "timestamp": datetime.now().isoformat()
         }
     
-    # ============================================================================
-    # INVOICING MODULE - Bookkeeping and Cost Tracking
-    # ============================================================================
-    
-    def create_invoice(self, supplier_id: int, invoice_number: str, 
-                      invoice_date: str, due_date: str = None, 
-                      notes: str = "") -> int:
-        """Create a new invoice from a supplier."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO invoices 
-            (supplier_id, invoice_number, invoice_date, due_date, status, notes)
-            VALUES (?, ?, ?, ?, 'pending', ?)
-        """, (supplier_id, invoice_number, invoice_date, due_date, notes))
-        
-        conn.commit()
-        return cursor.lastrowid
-    
-    def add_invoice_item(self, invoice_id: int, product_id: int, 
-                        product_name: str, quantity: float, unit_cost: float,
-                        order_id: int = None) -> int:
-        """Add a line item to an invoice."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        total_cost = quantity * unit_cost
-        
-        cursor.execute("""
-            INSERT INTO invoice_items 
-            (invoice_id, order_id, product_id, product_name, quantity, unit_cost, total_cost)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (invoice_id, order_id, product_id, product_name, quantity, unit_cost, total_cost))
-        
-        # Update invoice total
-        cursor.execute("""
-            UPDATE invoices 
-            SET total_amount = (SELECT SUM(total_cost) FROM invoice_items WHERE invoice_id = ?),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE invoice_id = ?
-        """, (invoice_id, invoice_id))
-        
-        conn.commit()
-        return cursor.lastrowid
-    
-    def get_invoice(self, invoice_id: int) -> Optional[Dict]:
-        """Get invoice details."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM invoices WHERE invoice_id = ?", (invoice_id,))
-        row = cursor.fetchone()
-        return dict(row) if row else None
-    
-    def get_invoice_items(self, invoice_id: int) -> List[Dict]:
-        """Get all line items for an invoice."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT * FROM invoice_items 
-            WHERE invoice_id = ?
-            ORDER BY item_id ASC
-        """, (invoice_id,))
-        return [dict(row) for row in cursor.fetchall()]
-    
-    def get_supplier_invoices(self, supplier_id: int, status: str = None) -> List[Dict]:
-        """Get all invoices for a supplier, optionally filtered by status."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        if status:
-            cursor.execute("""
-                SELECT * FROM invoices 
-                WHERE supplier_id = ? AND status = ?
-                ORDER BY invoice_date DESC
-            """, (supplier_id, status))
-        else:
-            cursor.execute("""
-                SELECT * FROM invoices 
-                WHERE supplier_id = ?
-                ORDER BY invoice_date DESC
-            """, (supplier_id,))
-        
-        return [dict(row) for row in cursor.fetchall()]
-    
-    def get_supplier_cost_breakdown(self, supplier_id: int) -> Dict[str, Any]:
-        """Get detailed cost breakdown for a supplier (total costs, per-unit costs, etc.)."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        # Get supplier name
-        cursor.execute("SELECT name FROM suppliers WHERE supplier_id = ?", (supplier_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise ValueError(f"Supplier {supplier_id} not found")
-        
-        supplier_name = row[0]
-        
-        # Get total amounts
-        cursor.execute("""
-            SELECT 
-                COUNT(DISTINCT invoice_id) as total_invoices,
-                SUM(total_amount) as total_cost,
-                SUM(paid_amount) as total_paid,
-                SUM(total_amount - paid_amount) as outstanding
-            FROM invoices
-            WHERE supplier_id = ?
-        """, (supplier_id,))
-        
-        summary = dict(cursor.fetchone())
-        
-        # Get per-product cost breakdown
-        cursor.execute("""
-            SELECT 
-                ii.product_id,
-                ii.product_name,
-                SUM(ii.quantity) as total_quantity,
-                AVG(ii.unit_cost) as avg_unit_cost,
-                MIN(ii.unit_cost) as min_unit_cost,
-                MAX(ii.unit_cost) as max_unit_cost,
-                SUM(ii.total_cost) as total_cost
-            FROM invoice_items ii
-            JOIN invoices i ON ii.invoice_id = i.invoice_id
-            WHERE i.supplier_id = ?
-            GROUP BY ii.product_id, ii.product_name
-            ORDER BY total_cost DESC
-        """, (supplier_id,))
-        
-        products = [dict(row) for row in cursor.fetchall()]
-        
-        # Get invoice status breakdown
-        cursor.execute("""
-            SELECT 
-                status,
-                COUNT(*) as count,
-                SUM(total_amount) as total_amount
-            FROM invoices
-            WHERE supplier_id = ?
-            GROUP BY status
-        """, (supplier_id,))
-        
-        status_breakdown = [dict(row) for row in cursor.fetchall()]
-        
-        return {
-            "supplier_id": supplier_id,
-            "supplier_name": supplier_name,
-            "summary": {
-                "total_invoices": summary.get("total_invoices") or 0,
-                "total_cost": summary.get("total_cost") or 0,
-                "total_paid": summary.get("total_paid") or 0,
-                "outstanding": summary.get("outstanding") or 0
-            },
-            "products": products,
-            "status_breakdown": status_breakdown
-        }
-    
-    def get_all_suppliers_cost_summary(self) -> List[Dict]:
-        """Get cost summary for all suppliers."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT 
-                s.supplier_id,
-                s.name,
-                COUNT(DISTINCT i.invoice_id) as total_invoices,
-                SUM(i.total_amount) as total_cost,
-                SUM(i.paid_amount) as total_paid,
-                SUM(i.total_amount - i.paid_amount) as outstanding,
-                COUNT(DISTINCT CASE WHEN i.status = 'pending' THEN i.invoice_id END) as pending_count
-            FROM suppliers s
-            LEFT JOIN invoices i ON s.supplier_id = i.supplier_id
-            GROUP BY s.supplier_id, s.name
-            ORDER BY total_cost DESC NULLS LAST
-        """)
-        
-        return [dict(row) for row in cursor.fetchall()]
-    
-    def update_invoice_status(self, invoice_id: int, status: str, 
-                             paid_amount: float = None) -> None:
-        """Update invoice status and optionally record payment."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
-        if paid_amount is not None:
-            cursor.execute("""
-                UPDATE invoices 
-                SET status = ?, paid_amount = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE invoice_id = ?
-            """, (status, paid_amount, invoice_id))
-        else:
-            cursor.execute("""
-                UPDATE invoices 
-                SET status = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE invoice_id = ?
-            """, (status, invoice_id))
-        
-        conn.commit()
-    
     def close(self):
         """Close database connection."""
         if self.connection:
@@ -693,16 +454,6 @@ if __name__ == "__main__":
     anomaly_id = db.log_anomaly(product_id, "unusually_high_consumption", "medium",
                                 "Consumption 50% above normal")
     print(f"✓ Anomaly logged: {anomaly_id}")
-    
-    # Test invoicing
-    invoice_id = db.create_invoice(supplier_id, "INV-20260218-001", "2026-02-18", "2026-03-18")
-    print(f"✓ Invoice created: {invoice_id}")
-    
-    item_id = db.add_invoice_item(invoice_id, product_id, "Premium Gasoline", 1000, 2.50, order_id)
-    print(f"✓ Invoice item added: {item_id}")
-    
-    supplier_costs = db.get_supplier_cost_breakdown(supplier_id)
-    print(f"✓ Supplier cost breakdown: ${supplier_costs['summary']['total_cost']:.2f} total")
     
     # Test queries
     summary = db.get_inventory_summary()
